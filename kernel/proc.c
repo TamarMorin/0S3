@@ -146,6 +146,16 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  #if SWAP_ALGO != 0
+      if (p->pid > 2) {
+        release(&p->lock);
+        createSwapFile(p);
+        acquire(&p->lock);
+        p->fileCounter = 0;
+        p->ramCounter = 0;
+        p->time = 0;
+      }
+  #endif
   return p;
 }
 
@@ -169,6 +179,28 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
+  #if SWAP_ALGO != 0
+    if(p->pid > 2) {
+      for (int i = 0; i < MAX_TOTAL_PAGES; i++){
+        p->pages[i].va = 0;
+        p->pages[i].used = PAGE_UNUSED;
+        p->pages[i].position = ABSENT;
+        #if SWAP_ALGO == 2
+          p->pages[i].counter = 0xFFFFFFFF;
+        #endif
+        #if SWAP_ALGO == 1
+          p->pages[i].counter = 0;
+        #endif
+        #if SWAP_ALGO == 3
+          p->pages[i].timeCreated = 0;
+        #endif
+      }
+      p->ramCounter = 0;
+      p->fileCounter = 0;
+      p->time = 0;
+    }
+  #endif
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -302,6 +334,25 @@ fork(void)
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
+  #if SWAP_ALGO != 0
+    if(p->pid > 2) {
+      for (int i = 0; i < MAX_TOTAL_PAGES; i++){
+        np->pages[i].va = p->pages[i].va;
+        np->pages[i].used = p->pages[i].used;
+        np->pages[i].position = p->pages[i].position;
+        np->pages[i].offset = p->pages[i].offset;
+        np->pages[i].counter = p->pages[i].counter;
+        np->pages[i].timeCreated = p->pages[i].timeCreated;
+      }
+      np->ramCounter = p->ramCounter;
+      np->fileCounter = p->fileCounter;
+      np->time = p->time;
+
+      copyFile(p, np);
+
+  }
+#endif
+
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
@@ -364,6 +415,12 @@ exit(int status)
   iput(p->cwd);
   end_op();
   p->cwd = 0;
+
+  #if SWAP_ALGO != 0
+    if(p->pid > 2){
+      removeSwapFile(p);
+    }
+  #endif
 
   acquire(&wait_lock);
 
@@ -461,6 +518,13 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
+        #if SWAP_ALGO == 1 || SWAP_ALGO == 2
+
+          if(p->pid > 2){
+            updateCounters(p);
+          }
+
+        #endif
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
@@ -679,5 +743,38 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+
+void copyFile(struct proc *p, struct proc *np){
+  for(int i=0; i<MAX_TOTAL_PAGES; i++){
+    if(p->pages[i].used == PAGE_USED && p->pages[i].position == SWAPFILE){
+      uint offset = i * PGSIZE;
+      char* mem;
+      mem = kalloc();
+      release(&np->lock);
+      if(readFromSwapFile(p, mem, offset, PGSIZE) == -1){
+        panic("readFromFile failed");
+      }
+      if(writeToSwapFile(np, mem, offset, PGSIZE) == -1){
+        panic("writeToFile failed");
+      }
+      acquire(&np->lock);
+      kfree(mem);
+    }
+  }
+}
+
+void updateCounters(struct proc *p){
+  pte_t * pte;
+  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+    if (p->pages[i].position == RAM){
+      pte = walk(p->pagetable,p->pages[i].va,0);
+      p->pages[i].counter = p->pages[i].counter >> 1;
+      if (*pte & PTE_A) {
+        *pte &= ~PTE_A;
+         p->pages[i].counter = p->pages[i].counter | (1 << 31);
+      }
+    } 
   }
 }

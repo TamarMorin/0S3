@@ -33,7 +33,8 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
-
+int             kfileread(struct file*, uint64, int n);
+int             kfilewrite(struct file*, uint64, int n);
 // fs.c
 void            fsinit(int);
 int             dirlink(struct inode*, char*, uint);
@@ -53,6 +54,10 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
+int		        createSwapFile(struct proc* p);
+int	          	readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
+int		        writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
+int		        removeSwapFile(struct proc* p);
 
 // ramdisk.c
 void            ramdiskinit(void);
@@ -106,6 +111,8 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+void            copyFile(struct proc *p, struct proc *np);
+void            updateCounters(struct proc *p);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -141,6 +148,10 @@ int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
 
+// sysfile
+struct inode*	create(char *path, short type, short major, short minor);
+int				isdirempty(struct inode *dp);
+
 // trap.c
 extern uint     ticks;
 void            trapinit(void);
@@ -173,6 +184,17 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+int             findNextIndex(struct proc* p);
+int             selectPageToSwap(struct proc* p);
+int             nfua(struct proc *p);
+int             lapa(struct proc *p);
+int             scfifo(struct proc *p);
+int             countOnes(uint n);
+int             findFirst(struct proc *p);
+void            swapToFile(struct proc *p);
+void            swapToRam(struct proc *p, uint64 va);
+int             createTime();
+
 
 // plic.c
 void            plicinit(void);

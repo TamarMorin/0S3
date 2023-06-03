@@ -57,6 +57,21 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
+
+NFUA:=1
+LAPA:=2
+SCFIFO:=3
+NONE:=0
+CFLAGS += -DNFUA=$(NFUA)
+CFLAGS += -DLAPA=$(LAPA)
+CFLAGS += -DSCFIFO=$(SCFIFO)
+CFLAGS += -DNONE=$(NONE)
+CFLAGS += -DSWAP_ALGO=$(SWAP_ALGO)
+
+ifndef SWAP_ALGO
+SWAP_ALGO:=LAPA
+endif
+
 CFLAGS += -MD
 CFLAGS += -mcmodel=medany
 CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
@@ -132,6 +147,8 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+	$U/_helloworld\
+	$U/_test\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

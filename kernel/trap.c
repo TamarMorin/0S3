@@ -68,9 +68,30 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    setkilled(p);
+
+    #if SWAP_ALGO != 0
+      if(p->pid > 2 && (r_scause() == 13 || r_scause() == 15)){
+        uint64 failVa = PGROUNDDOWN(r_stval());
+        pte_t *pte = walk(p->pagetable, failVa, 0);
+        if((*pte & PTE_V) == 0 && (*pte & PTE_PG) != 0) {
+          if(p->ramCounter == MAX_PSYC_PAGES){
+            swapToFile(p);
+          }
+          swapToRam(p, failVa);
+        }
+        else{
+          printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+          printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+          setkilled(p);
+        }
+      }
+
+    #else
+      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      setkilled(p);
+    
+    #endif
   }
 
   if(killed(p))

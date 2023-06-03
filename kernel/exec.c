@@ -114,6 +114,50 @@ exec(char *path, char **argv)
   // value, which goes in a0.
   p->trapframe->a1 = sp;
 
+  #if SWAP_ALGO != 0 
+    if(p->pid > 2) {
+        for (int i = 0; i < MAX_TOTAL_PAGES; i++){
+          p->pages[i].va = 0;
+          p->pages[i].used = PAGE_UNUSED;
+          p->pages[i].timeCreated = 0;
+          #if SWAP_ALGO == 2
+            p->pages[i].counter = 0xFFFFFFFF;
+          #endif
+          #if SWAP_ALGO == 1
+            p->pages[i].counter = 0;
+          #endif
+          if (p->pages[i].position == SWAPFILE)
+            {
+              p->fileCounter--;
+            }
+          if (p->pages[i].position == RAM)
+            {
+              p->ramCounter--;
+            }
+          p->pages[i].position = ABSENT;
+        }     
+        for(uint i =0, a = 0; a < sz; a += PGSIZE, i ++){
+          p->pages[i].va = a;
+          p->pages[i].used = PAGE_USED;
+          p->pages[i].position = RAM;
+          p->pages[i].timeCreated = createTime();
+          #if SWAP_ALGO == 2
+            p->pages[i].counter = 0xFFFFFFFF;
+          #endif
+          #if SWAP_ALGO == 1
+            p->pages[i].counter = 0;
+          #endif
+          p->ramCounter++;
+        }
+        if(removeSwapFile(p) < 0){
+          panic("Failed to remove swap file");
+        }
+        if(createSwapFile(p) < 0){
+          panic("Failed to add swap file");
+        }
+    }
+  #endif
+
   // Save program name for debugging.
   for(last=s=path; *s; s++)
     if(*s == '/')
